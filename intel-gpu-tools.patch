@@ -1,0 +1,129 @@
+diff --git a/lib/igt_core.c b/lib/igt_core.c
+index 7b47b32..5dca922 100644
+--- a/lib/igt_core.c
++++ b/lib/igt_core.c
+@@ -1299,7 +1299,11 @@ static void fatal_sig_handler(int sig)
+ 		pthread_t tid = pthread_self();
+ 		union sigval value = { .sival_ptr = NULL };
+ 
+-		pthread_sigqueue(tid, sig, value);
++		/* ugh idiots... pthread_sigqueue is ONLY AVAILABLE ON GLIBC */
++		/* WHY DID YOU PUT THIS IN AN IFNDEF __linux__ BLOCK */
++		/* BITCH ARE YOU RETARDED */
++		//pthread_sigqueue(tid, sig, value);
++		sigqueue(getpid(), sig, value);
+ #endif
+         }
+ }
+diff --git a/lib/igt_debugfs.c b/lib/igt_debugfs.c
+index b44333e..5a95e90 100644
+--- a/lib/igt_debugfs.c
++++ b/lib/igt_debugfs.c
+@@ -102,7 +102,7 @@ static bool __igt_debugfs_init(igt_debugfs_t *debugfs)
+ 
+ 	igt_assert(stat("/sys/kernel/debug", &st) == 0);
+ 
+-	mount("debug", "/sys/kernel/debug", "debugfs", 0, 0);
++	//mount("debug", "/sys/kernel/debug", "debugfs", 0, 0);
+ 
+ find_minor:
+ 	strcpy(debugfs->root, path);
+diff --git a/lib/igt_kms.c b/lib/igt_kms.c
+index d0c3690..1245ab8 100644
+--- a/lib/igt_kms.c
++++ b/lib/igt_kms.c
+@@ -309,9 +309,10 @@ static signed long set_vt_mode(unsigned long mode)
+ 		return -errno;
+ 
+ 	prev_mode = 0;
+-	if (drmIoctl(fd, KDGETMODE, &prev_mode))
++	errno = ENODEV;
++	//if (drmIoctl(fd, KDGETMODE, &prev_mode))
+ 		goto err;
+-	if (drmIoctl(fd, KDSETMODE, (void *)mode))
++	//if (drmIoctl(fd, KDSETMODE, (void *)mode))
+ 		goto err;
+ 
+ 	close(fd);
+@@ -360,7 +361,7 @@ void kmstest_set_vt_graphics_mode(void)
+ 	igt_install_exit_handler((igt_exit_handler_t) kmstest_restore_vt_mode);
+ 
+ 	igt_disable_exit_handler();
+-	ret = set_vt_mode(KD_GRAPHICS);
++	ret = -ENODEV; //set_vt_mode(KD_GRAPHICS);
+ 	igt_enable_exit_handler();
+ 
+ 	igt_assert(ret >= 0);
+diff --git a/lib/intel_os.c b/lib/intel_os.c
+index 1badd3e..b6552b4 100644
+--- a/lib/intel_os.c
++++ b/lib/intel_os.c
+@@ -45,6 +45,9 @@
+ #include <sys/sysinfo.h>
+ #elif defined(HAVE_SWAPCTL) /* Solaris */
+ #include <sys/swap.h>
++#elif defined(__FreeBSD__)
++#include <sys/types.h>
++#include <sys/sysctl.h>
+ #endif
+ 
+ #include "intel_io.h"
+@@ -78,6 +81,11 @@ intel_get_total_ram_mb(void)
+         npages = sysconf(_SC_PHYS_PAGES);
+ 
+ 	retval = (uint64_t) pagesize * npages;
++#elif defined(__FreeBSD__)
++	size_t len = 8;	/* uint64_t is always 8 bytes */
++
++	int res = sysctlbyname("hw.physmem", &retval, &len, NULL, 0);
++	igt_assert(res == 0);
+ #else
+ #error "Unknown how to get RAM size for this OS"
+ #endif
+@@ -119,6 +127,19 @@ intel_get_avail_ram_mb(void)
+         npages = sysconf(_SC_AVPHYS_PAGES);
+ 
+ 	retval = (uint64_t) pagesize * npages;
++#elif defined(__FreeBSD__)
++	size_t size = 8;  /* uint64_t is always 8 bytes */
++
++	uint64_t pgsize, freepg;
++
++	int res = sysctlbyname("vm.stats.vm.v_page_size", &pgsize, &size, NULL, 0);
++	igt_assert(res == 0);
++
++	size = 8;
++	res = sysctlbyname("vm.stats.vm.v_free_count", &freepg, &size, NULL, 0);
++	igt_assert(res == 0);
++
++	retval = (uint64_t) pgsize * freepg;
+ #else
+ #error "Unknown how to get available RAM for this OS"
+ #endif
+@@ -184,6 +205,11 @@ intel_get_total_swap_mb(void)
+ 	free(buf);
+ 
+ 	retval = (uint64_t) pagesize * totalpages;
++#elif defined(__FreeBSD__)
++	size_t size = 8;  /* uint64_t is always 8 bytes. */
++
++	int res = sysctlbyname("vm.swap_total", &retval, &size, NULL, 0);
++	igt_assert(res == 0);
+ #else
+ #warning "Unknown how to get swap size for this OS"
+ 	return 0;
+diff --git a/lib/ioctl_wrappers.c b/lib/ioctl_wrappers.c
+index 19a457a..b8f8325 100644
+--- a/lib/ioctl_wrappers.c
++++ b/lib/ioctl_wrappers.c
+@@ -49,6 +49,10 @@
+ #include <termios.h>
+ #include <errno.h>
+ 
++#ifdef __FreeBSD__
++#define mmap64 mmap
++#endif
++
+ #include "drmtest.h"
+ #include "i915_drm.h"
+ #include "intel_chipset.h"
