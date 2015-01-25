@@ -1,0 +1,33 @@
+--- games/minecraft-client/Makefile 2015-01-22 21:22:14.000000000 -0600
++++ games/minecraft-client/Makefile 2015-01-25 00:08:31.000000000 -0600
+@@ -40,10 +40,12 @@
+                -e 's|PREFIX|${PREFIX}|' \
+                -e 's|JAVA_CMD|${JAVA}|' ${FILESDIR}/minecraft-client \
+                > ${WRKDIR}/minecraft-client
++       ${SED}  -e 's|=JAVA_HOME|=${JAVA_HOME}|' ${FILESDIR}/minecraft-runtime \
++               > ${WRKDIR}/minecraft-runtime
+        ${SED} -e 's|%%PREFIX%%|${PREFIX}|' ${FILESDIR}/Notifier.java \
+                > ${WRKDIR}/Notifier.java
+        ${INSTALL_SCRIPT} ${WRKDIR}/minecraft-client ${STAGEDIR}${PREFIX}/bin
+-       ${INSTALL_SCRIPT} ${FILESDIR}/minecraft-runtime ${STAGEDIR}${DATADIR}
++       ${INSTALL_SCRIPT} ${WRKDIR}/minecraft-runtime ${STAGEDIR}${DATADIR}
+        ${INSTALL_DATA} ${WRKDIR}/Notifier.java ${STAGEDIR}${DATADIR}
+ 
+ .include <bsd.port.mk>
+--- games/minecraft-client/files/minecraft-runtime  2014-11-11 03:59:46.000000000 -0600
++++ games/minecraft-client/files/minecraft-runtime  2015-01-25 00:08:53.000000000 -0600
+@@ -4,7 +4,7 @@
+ LWJGL_OVRD="/usr/local/share/java/classes/lwjgl/lwjgl.jar"
+ LWJGL_UTIL_OVRD="/usr/local/share/java/classes/lwjgl/lwjgl_util.jar"
+ 
+-export JAVA_HOME=/usr/local/openjdk8
++export JAVA_HOME=JAVA_HOME
+ 
+ build_classpath() {
+     local IFS=":"
+@@ -41,4 +41,4 @@
+     esac
+ done
+ 
+-${JAVA_HOME}/jre/bin/java ${args}
++${JAVA_HOME}/bin/java ${args}
